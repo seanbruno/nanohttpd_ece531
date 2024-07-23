@@ -40,6 +40,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
+import org.json.*;
 
 import fi.iki.elonen.NanoHTTPD;
 // NOTE: If you're using NanoHTTPD >= 3.0.0 the namespace is different,
@@ -92,34 +94,123 @@ public class App extends NanoHTTPD {
     @Override
     public Response serve(IHTTPSession session) {
         String msg = "<html><body><h1>Hello server</h1>\n";
-        Map<String, String> parms = session.getParms();
-        if (parms.get("username") == null) {
-            msg += "<form action='?' method='get'>";
-            msg += "<input type='text' name='username'>";
-	    msg += "<label for='username'> Enter your new username here</label>";
-	    msg += "<br>";
-            msg += "<input type='text' name='username2'>";
-	    msg += "<label for='username2'> Enter your new username2 here</label>";
-            msg += "</form>";
-        } else {
-            msg += "<p>Hello, " + parms.get("username") + "!</p>";
+
+        Method method = session.getMethod();
+        Map<String, String> headers = session.getHeaders();
+        Map<String, String> files = new HashMap<String, String>();
+
+// Client PUT/POST means we are inserting.  No Auth, just DO EET.
+        if (Method.PUT.equals(method) || Method.POST.equals(method)) {
+          try {
+            session.parseBody(files);
+            String json_record = files.get("postData");
+            JSONObject new_record = new JSONObject(json_record);
+            Integer record_id = -1;
+
             try {
-                createData(parms.get("username"), "test");
+              record_id = createData(new_record.getString("fname"), new_record.getString("lname"));
             } catch (SQLException sqle) {
-                System.err.println("Error inserting data:\n" + sqle);
+                System.err.println("Error JSON inserting data:\n" + sqle);
             }
+            return newFixedLengthResponse("{id: " + record_id + "}\n");
+          } catch (IOException | ResponseException e) {
+            System.err.println("Error parsing inbound data:\n" + e);
+          }
+// Client DELETE for a req of a specific ID
+        } else if (Method.DELETE.equals(method)) {
+          String id_req = session.getUri();
+          if (id_req.substring(1).length() > 0 && !(id_req.equals("/favicon.ico"))) {
+            System.out.println("Saw postData: \n" + id_req.substring(1));
+            try {
+              deleteData(id_req.substring(1));
+            } catch (SQLException sqle) {
+                System.err.println("Error deleting ID " + id_req.substring(1) + " :\n" + sqle);
+            }
+          }
+// Client GET did a req for a specifc ID
+        } else if (Method.GET.equals(method)) {
+          String id_req = session.getUri();
+          msg += "<h3> Current Data in DB </h3>\n";
+          if (id_req.substring(1).length() > 0 && !(id_req.equals("/favicon.ico"))) {
+            System.out.println("Saw postData: \n" + id_req.substring(1));
+            try {
+              msg += getData(id_req.substring(1));
+            } catch (SQLException sqle) {
+                System.err.println("Error getting ID " + id_req.substring(1) + "inserting data:\n" + sqle);
+            }
+          } else {
+// Client is doing a GET, show data in DB.
+            try {
+              msg += checkData();
+            } catch (SQLException sqle) {
+                System.err.println("Error JSON inserting data:\n" + sqle);
+            }
+          }
         }
         return newFixedLengthResponse(msg + "</body></html>\n");
-    }
+  }
 
-    private static void createData(String fname, String lname) throws SQLException {
-    	try (PreparedStatement statement = db_conn.prepareStatement("INSERT INTO active_users(fname, lname) VALUES (?, ?)")) {
+    // Grab the contents of the DB and display it so that you can see the
+    // current list of peoples inserted.
+    private static String checkData() throws SQLException {
+      ResultSet table_contents;
+      String sqlmsg = "";
+    	try (PreparedStatement statement = db_conn.prepareStatement("select * from active_users")) {
+        table_contents = statement.executeQuery();
+        while (table_contents.next()) {
+          sqlmsg += "id: " + table_contents.getInt("id") + " || fname: " + table_contents.getString("fname") + " || lname: " + table_contents.getString("lname") + "<br>";
+        }
+        System.out.println("Attempted to display contents: " + sqlmsg);
+      } catch (Throwable exc) {
+            exc.printStackTrace();
+      }
+      return(sqlmsg);
+   }
+
+    // Insert the data.
+    private static Integer createData(String fname, String lname) throws SQLException {
+      Integer new_rec_id = -1;
+      ResultSet last_id_rs;
+    	try (PreparedStatement statement = db_conn.prepareStatement("INSERT INTO active_users(fname, lname) VALUES (?, ?)", PreparedStatement.RETURN_GENERATED_KEYS)) {
         	statement.setString(1, fname);
         	statement.setString(2, lname);
-        	int rowsInserted = statement.executeUpdate();
-        	System.out.println("Rows inserted: " + rowsInserted);
-        } catch (Throwable exc) {
+        	statement.executeUpdate();
+          last_id_rs = statement.getGeneratedKeys();
+          if (last_id_rs.next()) {
+            new_rec_id = last_id_rs.getInt(1);
+        	  System.out.println("Rows id is: " + new_rec_id + "\n");
+          }
+      } catch (Throwable exc) {
             exc.printStackTrace();
-        }
+      }
+      return(new_rec_id);
 	}
+
+    // Get specific ID from DB
+    private static String getData(String id) throws SQLException {
+      ResultSet table_contents;
+      String sqlmsg = "";
+    	try (PreparedStatement statement = db_conn.prepareStatement("select * from active_users where id = ?")) {
+        statement.setString(1, id);
+        table_contents = statement.executeQuery();
+        while (table_contents.next()) {
+          sqlmsg += "id: " + table_contents.getInt("id") + " || fname: " + table_contents.getString("fname") + " || lname: " + table_contents.getString("lname") + "<br>";
+        }
+        System.out.println("Attempted to display contents: " + sqlmsg);
+      } catch (Throwable exc) {
+            exc.printStackTrace();
+      }
+      return(sqlmsg);
+  }
+
+    // Insert the data.
+    private static void deleteData(String id_req) throws SQLException {
+  	try (PreparedStatement statement = db_conn.prepareStatement("delete from active_users where id = ?")) {
+      	statement.setString(1, id_req);
+       	int rowsInserted = statement.executeUpdate();
+       	System.out.println("Rows deleted: " + rowsInserted);
+    } catch (Throwable exc) {
+        exc.printStackTrace();
+    }
+  }
 }
