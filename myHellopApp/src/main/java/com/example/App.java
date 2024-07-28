@@ -55,19 +55,19 @@ public class App extends NanoHTTPD {
         start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
     }
 
-    //iMariaDB [ece531]> show create table active_schedule;
-    //+-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    //| Table           | Create Table                                                                                                                                                                                                                                                                                                                           |
-    //+-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-    //| active_schedule | CREATE TABLE `active_schedule` (
-    //  `tod` int(2) unsigned zerofill NOT NULL,
-    //  `temp` int(3) NOT NULL,
-    //   PRIMARY KEY (`tod`),
-    //   CONSTRAINT `tod_range` CHECK (`tod` < 24),
-    //   CONSTRAINT `low_temp` CHECK (`temp` > -50),
-    //   CONSTRAINT `high_temp` CHECK (`temp` < 100)
-    //   ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci |
-    //            1 row in set (0.000 sec)
+    // iMariaDB [ece531]> show create table active_schedule;
+    // +-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    // | Table | Create Table |
+    // +-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    // | active_schedule | CREATE TABLE `active_schedule` (
+    // `tod` int(2) unsigned zerofill NOT NULL,
+    // `temp` int(3) NOT NULL,
+    // PRIMARY KEY (`tod`),
+    // CONSTRAINT `tod_range` CHECK (`tod` < 24),
+    // CONSTRAINT `low_temp` CHECK (`temp` > -50),
+    // CONSTRAINT `high_temp` CHECK (`temp` < 100)
+    // ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci |
+    // 1 row in set (0.000 sec)
     //
     private static Connection db_conn;
 
@@ -124,11 +124,10 @@ public class App extends NanoHTTPD {
 // Client GET did a req for a specifc ID
         } else if (Method.GET.equals(method)) {
           String id_req = session.getUri();
-          msg += "<h3> Current Schedule in DB </h3>\n";
           if (id_req.substring(1).length() > 0 && !(id_req.equals("/favicon.ico"))) {
             System.out.println("Saw postData: \n" + id_req.substring(1));
             try {
-              msg += getData(id_req.substring(1));
+              msg = getData(id_req.substring(1));
             } catch (SQLException sqle) {
                 System.err.println("Error getting ID " + id_req.substring(1) + "inserting data:\n" + sqle);
             }
@@ -141,7 +140,7 @@ public class App extends NanoHTTPD {
             }
           }
         }
-        return newFixedLengthResponse(msg + "</body></html>\n");
+        return newFixedLengthResponse(msg);
   }
 
     // Grab the contents of the DB and display it so that you can see the
@@ -184,7 +183,7 @@ public class App extends NanoHTTPD {
         statement.setString(1, id);
         table_contents = statement.executeQuery();
         while (table_contents.next()) {
-          sqlmsg += "tod: " + table_contents.getString("tod") + " || temp: " + table_contents.getString("temp") + "<br>";
+          sqlmsg += "{tod: " + table_contents.getString("tod") + ", temp: " + table_contents.getString("temp") + "}";
         }
         System.out.println("Attempted to display contents: " + sqlmsg);
       } catch (Throwable exc) {
