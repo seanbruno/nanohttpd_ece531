@@ -53,33 +53,23 @@ public class App extends NanoHTTPD {
     public App() throws IOException {
         super(8080);
         start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
-        System.out.println("\nRunning! Point your browsers to http://localhost:8080/ \n");
     }
 
-    // Current database schema:
-    // MariaDB [ece531]> show tables ;
-    // +------------------+
-    // | Tables_in_ece531 |
-    // +------------------+
-    // | active_users |
-    // +------------------+
-    // 1 row in set (0.000 sec)
+    //| active_schedule | CREATE TABLE `active_schedule` (
+    //  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+    //  `tod` int(4) unsigned zerofill NOT NULL,
+    // `temp` int(3) NOT NULL,
+    //  PRIMARY KEY (`id`),
+    //  CONSTRAINT `tod_range` CHECK (`tod` < 2400),
+    //  CONSTRAINT `low_temp` CHECK (`temp` > -50),
+    //  CONSTRAINT `high_temp` CHECK (`temp` < 100)
+    //  ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci |
     //
-    // MariaDB [ece531]> describe active_users;
-    // +-------+------------------+------+-----+---------+----------------+
-    // | Field | Type | Null | Key | Default | Extra |
-    // +-------+------------------+------+-----+---------+----------------+
-    // | id | int(10) unsigned | NO | PRI | NULL | auto_increment |
-    // | fname | varchar(150) | NO | | NULL | |
-    // | lname | varchar(150) | NO | | NULL | |
-    // +-------+------------------+------+-----+---------+----------------+
-    // 3 rows in set (0.001 sec)
-
     private static Connection db_conn;
 
     public static void main(String[] args) {
         try {
-            db_conn = DriverManager.getConnection("jdbc:mariadb://localhost:3306/ece531", "ece531", "REDACT");
+            db_conn = DriverManager.getConnection("jdbc:mariadb://localhost:3306/ece531", "ece531", "REDACTED");
         } catch (Throwable exc) {
             exc.printStackTrace();
         }
@@ -93,7 +83,7 @@ public class App extends NanoHTTPD {
 
     @Override
     public Response serve(IHTTPSession session) {
-        String msg = "<html><body><h1>Hello server</h1>\n";
+        String msg = "<html><body><h1>Thermostat Control</h1>\n";
 
         Method method = session.getMethod();
         Map<String, String> headers = session.getHeaders();
@@ -108,7 +98,7 @@ public class App extends NanoHTTPD {
             Integer record_id = -1;
 
             try {
-              record_id = createData(new_record.getString("fname"), new_record.getString("lname"));
+              record_id = createData(new_record.getString("tod"), new_record.getString("temp"));
             } catch (SQLException sqle) {
                 System.err.println("Error JSON inserting data:\n" + sqle);
             }
@@ -130,7 +120,7 @@ public class App extends NanoHTTPD {
 // Client GET did a req for a specifc ID
         } else if (Method.GET.equals(method)) {
           String id_req = session.getUri();
-          msg += "<h3> Current Data in DB </h3>\n";
+          msg += "<h3> Current Schedule in DB </h3>\n";
           if (id_req.substring(1).length() > 0 && !(id_req.equals("/favicon.ico"))) {
             System.out.println("Saw postData: \n" + id_req.substring(1));
             try {
@@ -155,10 +145,10 @@ public class App extends NanoHTTPD {
     private static String checkData() throws SQLException {
       ResultSet table_contents;
       String sqlmsg = "";
-    	try (PreparedStatement statement = db_conn.prepareStatement("select * from active_users")) {
+    	try (PreparedStatement statement = db_conn.prepareStatement("select * from active_schedule")) {
         table_contents = statement.executeQuery();
         while (table_contents.next()) {
-          sqlmsg += "id: " + table_contents.getInt("id") + " || fname: " + table_contents.getString("fname") + " || lname: " + table_contents.getString("lname") + "<br>";
+          sqlmsg += "id: " + table_contents.getInt("id") + " || tod: " + table_contents.getString("tod") + " || temp: " + table_contents.getString("temp") + "<br>";
         }
         System.out.println("Attempted to display contents: " + sqlmsg);
       } catch (Throwable exc) {
@@ -171,7 +161,7 @@ public class App extends NanoHTTPD {
     private static Integer createData(String fname, String lname) throws SQLException {
       Integer new_rec_id = -1;
       ResultSet last_id_rs;
-    	try (PreparedStatement statement = db_conn.prepareStatement("INSERT INTO active_users(fname, lname) VALUES (?, ?)", PreparedStatement.RETURN_GENERATED_KEYS)) {
+    	try (PreparedStatement statement = db_conn.prepareStatement("INSERT INTO active_schedule(tod, temp) VALUES (?, ?)", PreparedStatement.RETURN_GENERATED_KEYS)) {
         	statement.setString(1, fname);
         	statement.setString(2, lname);
         	statement.executeUpdate();
@@ -190,11 +180,11 @@ public class App extends NanoHTTPD {
     private static String getData(String id) throws SQLException {
       ResultSet table_contents;
       String sqlmsg = "";
-    	try (PreparedStatement statement = db_conn.prepareStatement("select * from active_users where id = ?")) {
+    	try (PreparedStatement statement = db_conn.prepareStatement("select * from active_schedule where id = ?")) {
         statement.setString(1, id);
         table_contents = statement.executeQuery();
         while (table_contents.next()) {
-          sqlmsg += "id: " + table_contents.getInt("id") + " || fname: " + table_contents.getString("fname") + " || lname: " + table_contents.getString("lname") + "<br>";
+          sqlmsg += "id: " + table_contents.getInt("id") + " || tod: " + table_contents.getString("tod") + " || temp: " + table_contents.getString("temp") + "<br>";
         }
         System.out.println("Attempted to display contents: " + sqlmsg);
       } catch (Throwable exc) {
@@ -205,7 +195,7 @@ public class App extends NanoHTTPD {
 
     // Insert the data.
     private static void deleteData(String id_req) throws SQLException {
-  	try (PreparedStatement statement = db_conn.prepareStatement("delete from active_users where id = ?")) {
+  	try (PreparedStatement statement = db_conn.prepareStatement("delete from active_schedule where id = ?")) {
       	statement.setString(1, id_req);
        	int rowsInserted = statement.executeUpdate();
        	System.out.println("Rows deleted: " + rowsInserted);
