@@ -55,15 +55,19 @@ public class App extends NanoHTTPD {
         start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
     }
 
+    //iMariaDB [ece531]> show create table active_schedule;
+    //+-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+    //| Table           | Create Table                                                                                                                                                                                                                                                                                                                           |
+    //+-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
     //| active_schedule | CREATE TABLE `active_schedule` (
-    //  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-    //  `tod` int(4) unsigned zerofill NOT NULL,
-    // `temp` int(3) NOT NULL,
-    //  PRIMARY KEY (`id`),
-    //  CONSTRAINT `tod_range` CHECK (`tod` < 2400),
-    //  CONSTRAINT `low_temp` CHECK (`temp` > -50),
-    //  CONSTRAINT `high_temp` CHECK (`temp` < 100)
-    //  ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci |
+    //  `tod` int(2) unsigned zerofill NOT NULL,
+    //  `temp` int(3) NOT NULL,
+    //   PRIMARY KEY (`tod`),
+    //   CONSTRAINT `tod_range` CHECK (`tod` < 24),
+    //   CONSTRAINT `low_temp` CHECK (`temp` > -50),
+    //   CONSTRAINT `high_temp` CHECK (`temp` < 100)
+    //   ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci |
+    //            1 row in set (0.000 sec)
     //
     private static Connection db_conn;
 
@@ -148,7 +152,7 @@ public class App extends NanoHTTPD {
     	try (PreparedStatement statement = db_conn.prepareStatement("select * from active_schedule")) {
         table_contents = statement.executeQuery();
         while (table_contents.next()) {
-          sqlmsg += "id: " + table_contents.getInt("id") + " || tod: " + table_contents.getString("tod") + " || temp: " + table_contents.getString("temp") + "<br>";
+          sqlmsg += "tod: " + table_contents.getString("tod") + " || temp: " + table_contents.getString("temp") + "<br>";
         }
         System.out.println("Attempted to display contents: " + sqlmsg);
       } catch (Throwable exc) {
@@ -158,33 +162,29 @@ public class App extends NanoHTTPD {
    }
 
     // Insert the data.
-    private static Integer createData(String fname, String lname) throws SQLException {
+    private static Integer createData(String tod, String temp) throws SQLException {
       Integer new_rec_id = -1;
-      ResultSet last_id_rs;
-    	try (PreparedStatement statement = db_conn.prepareStatement("INSERT INTO active_schedule(tod, temp) VALUES (?, ?)", PreparedStatement.RETURN_GENERATED_KEYS)) {
-        	statement.setString(1, fname);
-        	statement.setString(2, lname);
+      try (PreparedStatement statement = db_conn.prepareStatement("REPLACE INTO active_schedule(tod, temp) VALUES (?, ?)", PreparedStatement.RETURN_GENERATED_KEYS)) {
+        	statement.setString(1, tod);
+        	statement.setString(2, temp);
         	statement.executeUpdate();
-          last_id_rs = statement.getGeneratedKeys();
-          if (last_id_rs.next()) {
-            new_rec_id = last_id_rs.getInt(1);
-        	  System.out.println("Rows id is: " + new_rec_id + "\n");
-          }
+
+        new_rec_id = Integer.valueOf(tod); 
       } catch (Throwable exc) {
-            exc.printStackTrace();
+        exc.printStackTrace();
       }
       return(new_rec_id);
-	}
+    }
 
     // Get specific ID from DB
     private static String getData(String id) throws SQLException {
       ResultSet table_contents;
       String sqlmsg = "";
-    	try (PreparedStatement statement = db_conn.prepareStatement("select * from active_schedule where id = ?")) {
+    	try (PreparedStatement statement = db_conn.prepareStatement("select * from active_schedule where tod = ?")) {
         statement.setString(1, id);
         table_contents = statement.executeQuery();
         while (table_contents.next()) {
-          sqlmsg += "id: " + table_contents.getInt("id") + " || tod: " + table_contents.getString("tod") + " || temp: " + table_contents.getString("temp") + "<br>";
+          sqlmsg += "tod: " + table_contents.getString("tod") + " || temp: " + table_contents.getString("temp") + "<br>";
         }
         System.out.println("Attempted to display contents: " + sqlmsg);
       } catch (Throwable exc) {
@@ -195,7 +195,7 @@ public class App extends NanoHTTPD {
 
     // Insert the data.
     private static void deleteData(String id_req) throws SQLException {
-  	try (PreparedStatement statement = db_conn.prepareStatement("delete from active_schedule where id = ?")) {
+  	try (PreparedStatement statement = db_conn.prepareStatement("delete from active_schedule where tod = ?")) {
       	statement.setString(1, id_req);
        	int rowsInserted = statement.executeUpdate();
        	System.out.println("Rows deleted: " + rowsInserted);
